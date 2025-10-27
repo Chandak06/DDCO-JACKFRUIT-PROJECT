@@ -1,7 +1,3 @@
-// Common definitions
-`ifndef DEFS_VH
-`define DEFS_VH
-
+// Definitions for the elevator system
+// Inferred from VCD log (car1 assigned bit 2, car2 assigned bit 5)
 `define FLOORS 6
-
-`endif

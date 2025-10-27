@@ -15,35 +15,92 @@ module dual_elevator_controller(
     output car2_moving
 );
 
-    // Simple scheduler: combine hall calls and car requests into a single request mask
-    wire [`FLOORS-1:0] combined = hall_up | hall_down | car1_req | car2_req;
+    // --- Internal Registers for Pending Requests ---
+    // The controller must latch requests and clear them
+    // only when they are serviced.
+    reg [`FLOORS-1:0] pending_hall_up;
+    reg [`FLOORS-1:0] pending_hall_down;
+    reg [`FLOORS-1:0] pending_car1_req;
+    reg [`FLOORS-1:0] pending_car2_req;
 
-    // Very simple assignment: split floors 0..(FLOORS/2-1) -> car1, rest -> car2
+    // Wires from cars indicating a floor is serviced
+    wire [`FLOORS-1:0] car1_serviced;
+    wire [`FLOORS-1:0] car2_serviced;
+    
+    // Combined serviced mask
+    wire [`FLOORS-1:0] any_serviced = car1_serviced | car2_serviced;
+
+    // --- Stateful Request Latching and Clearing ---
+    always @(posedge clk or posedge rst) begin
+        if (rst) begin
+            pending_hall_up   <= 0;
+            pending_hall_down <= 0;
+            pending_car1_req  <= 0;
+            pending_car2_req  <= 0;
+        end else begin
+            // 1. Latch new requests
+            pending_hall_up   <= pending_hall_up   | hall_up;
+            pending_hall_down <= pending_hall_down | hall_down;
+            pending_car1_req  <= pending_car1_req  | car1_req;
+            pending_car2_req  <= pending_car2_req  | car2_req;
+
+            // 2. Clear requests that are being serviced
+            //    (car*_serviced is a one-hot mask of the floor)
+            pending_hall_up   <= pending_hall_up   & ~any_serviced;
+            pending_hall_down <= pending_hall_down & ~any_serviced;
+            pending_car1_req  <= pending_car1_req  & ~car1_serviced;
+            pending_car2_req  <= pending_car2_req  & ~car2_serviced;
+        end
+    end
+    
+    // --- Combinational Scheduler ---
+    // (This logic is the same as before, but uses the
+    // stateful pending registers instead of direct inputs)
+    
+    // Combine all pending hall calls
+    wire [`FLOORS-1:0] all_hall_calls = pending_hall_up | pending_hall_down;
+
     localparam MID = `FLOORS/2;
 
-    reg [`FLOORS-1:0] assign1, assign2;
+    reg [`FLOORS-1:0] assign1_comb, assign2_comb;
 
     integer j;
     always @(*) begin
-        assign1 = 0; assign2 = 0;
-        for (j=0;j<`FLOORS;j=j+1) begin
+        assign1_comb = 0; 
+        assign2_comb = 0;
+        // Simple assignment: split floors
+        for (j=0; j<`FLOORS; j=j+1) begin
             if (j < MID)
-                assign1[j] = combined[j];
+                assign1_comb[j] = all_hall_calls[j];
             else
-                assign2[j] = combined[j];
+                assign2_comb[j] = all_hall_calls[j];
         end
+        
+        // Add direct car requests
+        assign1_comb = assign1_comb | pending_car1_req;
+        assign2_comb = assign2_comb | pending_car2_req;
     end
+    
+    assign car1_assign = assign1_comb;
+    assign car2_assign = assign2_comb;
 
-    // Instantiate elevator cars
+    // --- Instantiate elevator cars ---
     elevator_car #(.ID(1)) car1(
-        .clk(clk), .rst(rst), .requests(assign1), .pending(), .current_floor(car1_floor), .moving(car1_moving)
+        .clk(clk), 
+        .rst(rst), 
+        .requests(car1_assign), 
+        .current_floor(car1_floor), 
+        .moving(car1_moving),
+        .serviced(car1_serviced)
     );
 
     elevator_car #(.ID(2)) car2(
-        .clk(clk), .rst(rst), .requests(assign2), .pending(), .current_floor(car2_floor), .moving(car2_moving)
+        .clk(clk), 
+        .rst(rst), 
+        .requests(car2_assign), 
+        .current_floor(car2_floor), 
+        .moving(car2_moving),
+        .serviced(car2_serviced)
     );
-
-    assign car1_assign = assign1;
-    assign car2_assign = assign2;
 
 endmodule
