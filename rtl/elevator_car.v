@@ -9,7 +9,10 @@ module elevator_car #(
     input [`FLOORS-1:0] requests, // bitmask of floors requested for this car
     output reg [2:0] current_floor, // enough bits for floors
     output reg moving, // 1 if moving, 0 if idle
-    output reg [`FLOORS-1:0] serviced // one-hot mask of floor being serviced
+    // expose pending requests so controller can inspect/monitor (controller instantiation may use .pending())
+    output reg [`FLOORS-1:0] pending,
+    // one-hot mask indicating which floor is being serviced this cycle
+    output reg [`FLOORS-1:0] serviced
 );
 
     // FSM States
@@ -19,7 +22,7 @@ module elevator_car #(
 
     reg [1:0] state;
     reg [2:0] stop_timer; // Timer for S_STOPPED state
-    reg [`FLOORS-1:0] pending; // Internal pending mask
+    // `pending` is declared as an output port and used internally as the pending mask
     reg [2:0] target; // Target floor
     
     integer i;
@@ -35,10 +38,8 @@ module elevator_car #(
             target <= 0;
             serviced <= 0;
         end else begin
-            
-            // Default: serviced is 0 unless in S_STOPPED
+            // default: no floor is being serviced this cycle
             serviced <= 0;
-
             case (state)
                 S_IDLE: begin
                     moving <= 0;
@@ -95,8 +96,8 @@ module elevator_car #(
                 
                 S_STOPPED: begin
                     moving <= 0;
-                    serviced[current_floor] <= 1; // Signal to controller
-                    
+                    serviced[current_floor] <= 1; // indicate which floor is being serviced
+
                     // We already cleared the request when entering this state
                     // DO NOT latch new requests here, wait until IDLE
 

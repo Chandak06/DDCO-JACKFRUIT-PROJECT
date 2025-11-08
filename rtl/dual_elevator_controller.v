@@ -32,26 +32,20 @@ module dual_elevator_controller(
 
     // --- Stateful Request Latching and Clearing ---
     always @(posedge clk or posedge rst) begin
-        if (rst) begin
-            pending_hall_up   <= 0;
-            pending_hall_down <= 0;
-            pending_car1_req  <= 0;
-            pending_car2_req  <= 0;
-        end else begin
-            // 1. Latch new requests
-            pending_hall_up   <= pending_hall_up   | hall_up;
-            pending_hall_down <= pending_hall_down | hall_down;
-            pending_car1_req  <= pending_car1_req  | car1_req;
-            pending_car2_req  <= pending_car2_req  | car2_req;
-
-            // 2. Clear requests that are being serviced
-            //    (car*_serviced is a one-hot mask of the floor)
-            pending_hall_up   <= pending_hall_up   & ~any_serviced;
-            pending_hall_down <= pending_hall_down & ~any_serviced;
-            pending_car1_req  <= pending_car1_req  & ~car1_serviced;
-            pending_car2_req  <= pending_car2_req  & ~car2_serviced;
-        end
+    if (rst) begin
+        pending_hall_up   <= 0;
+        pending_hall_down <= 0;
+        pending_car1_req  <= 0;
+        pending_car2_req  <= 0;
+    end else begin
+        // latch new requests and clear serviced floors in one expression
+        pending_hall_up   <= (pending_hall_up   | hall_up)   & ~any_serviced;
+        pending_hall_down <= (pending_hall_down | hall_down) & ~any_serviced;
+        pending_car1_req  <= (pending_car1_req  | car1_req)  & ~car1_serviced;
+        pending_car2_req  <= (pending_car2_req  | car2_req)  & ~car2_serviced;
     end
+end
+
     
     // --- Combinational Scheduler ---
     // (This logic is the same as before, but uses the
