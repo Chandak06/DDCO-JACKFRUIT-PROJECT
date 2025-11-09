@@ -1,5 +1,5 @@
 `timescale 1ns/1ps
-`include "rtl/defs.vh"
+`include "defs.vh"
 
 module dual_elevator_tb;
     reg clk = 0;
@@ -21,7 +21,6 @@ module dual_elevator_tb;
         .car1_assign(car1_assign), .car2_assign(car2_assign), .car1_floor(car1_floor), .car2_floor(car2_floor), .car1_moving(car1_moving), .car2_moving(car2_moving)
     );
 
-    // clock
     always #5 clk = ~clk;
 
     initial begin
@@ -32,16 +31,14 @@ module dual_elevator_tb;
 
         #12 rst = 0;
 
-        // sequence of calls
-        #10 hall_up[2] = 1; // call at floor 2 up
-        #50 hall_down[5] = 1; // call at top floor down
-        #50 car1_req[0] = 1; // car1 direct request to floor 0
-        #80 hall_up[1] = 1; // another call
+        #10 hall_up[2] = 1;
+        #50 hall_down[5] = 1;
+        #50 car1_req[0] = 1; 
+        #80 hall_up[1] = 1;
 
         #500 $finish;
     end
 
-    // simple monitor
     always @(posedge clk) begin
         if (!rst) begin
             $display("time=%0t car1_floor=%0d car2_floor=%0d car1_m=%b car2_m=%b car1_assign=%b car2_assign=%b", $time, car1_floor, car2_floor, car1_moving, car2_moving, car1_assign, car2_assign);
